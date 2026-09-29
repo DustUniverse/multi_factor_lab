@@ -1,0 +1,19 @@
+# 虚拟环境与缓存
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# 数据不入库（五年全市场行情体积很大，用脚本重新拉取）
+data/
+*.csv
+*.parquet
+*.h5
+
+# 敏感信息（Tushare token 走环境变量，绝不入库）
+.env
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
