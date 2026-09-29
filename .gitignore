@@ -5,7 +5,7 @@ __pycache__/
 .ipynb_checkpoints/
 
 # 数据不入库（五年全市场行情体积很大，用脚本重新拉取）
-data/
+/data/
 *.csv
 *.parquet
 *.h5
