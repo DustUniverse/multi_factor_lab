@@ -97,7 +97,7 @@ def main() -> None:
     parser.add_argument("--start", default="20190930", help="起始日期 YYYYMMDD")
     parser.add_argument("--end", default="20240930", help="结束日期 YYYYMMDD")
     parser.add_argument("--limit", type=int, default=None, help="只抓前 N 只")
-    parser.add_argument("--sleep", type=float, default=1.5, help="每只间隔秒数")
+    parser.add_argument("--sleep", type=float, default=3.0, help="每只间隔秒数")
     parser.add_argument("--force", action="store_true", help="已存在也重抓")
     args = parser.parse_args()
 
@@ -110,6 +110,7 @@ def main() -> None:
 
     success, skip, fail = 0, 0, 0
     fail_list = []
+    consecutive_fail = 0
 
     for i, row in universe.iterrows():
         symbol = str(row["symbol"]).zfill(6)
@@ -125,10 +126,18 @@ def main() -> None:
             print("空")
             fail += 1
             fail_list.append(symbol)
+            consecutive_fail += 1
         else:
             df.to_parquet(out_path, index=False)
             print(f"{len(df)} 行")
             success += 1
+            consecutive_fail = 0
+
+        # 连续失败 3 只，暂停 30 秒
+        if consecutive_fail >= 3:
+            print("    ⚠ 连续失败 3 只，暂停 30 秒让 IP 冷却...")
+            time.sleep(30)
+            consecutive_fail = 0
 
         # 随机间隔，避免固定节奏被识别
         time.sleep(args.sleep + random.uniform(0, 0.5))
