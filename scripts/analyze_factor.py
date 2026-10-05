@@ -26,7 +26,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))  # noqa: E402
 
 from mfalpha.common.constants import DATA_DIR  # noqa: E402
 
-DEFAULT_PANEL = DATA_DIR.parent / "processed" / "daily_panel_10_momentum.parquet"
+DEFAULT_PANEL = DATA_DIR.parent / "processed" / "daily_panel_10_factors.parquet"
 DEFAULT_OUTDIR = PROJECT_ROOT / "docs" / "figures" / "alphalens_ic"
 
 
@@ -100,14 +100,15 @@ def main() -> None:
         periods=periods,
     )
 
-    args.outdir.mkdir(parents=True, exist_ok=True)
+    outdir = args.outdir / args.factor
+    outdir.mkdir(parents=True, exist_ok=True)
 
     # 图 1：IC 时间序列
     alphalens.plotting.plot_ic_ts(factor_data)
     fig = plt.gcf()
     fig.set_size_inches(16, _ic_ts_fig_height(len(periods)))  # 随 periods 数量自适应
     _tidy_date_axes(fig)
-    fig.savefig(args.outdir / "ic_ts.png", dpi=110, bbox_inches="tight")
+    fig.savefig(outdir / "ic_ts.png", dpi=110, bbox_inches="tight")
     plt.close("all")
 
     # 图 2：IC 分布直方图
@@ -115,7 +116,7 @@ def main() -> None:
     fig = plt.gcf()
     fig.set_size_inches(14, 9)
     _tidy_numeric_axes(fig)
-    fig.savefig(args.outdir / "ic_hist.png", dpi=110, bbox_inches="tight")
+    fig.savefig(outdir / "ic_hist.png", dpi=110, bbox_inches="tight")
     plt.close("all")
 
     # 图 3：IC QQ 图
@@ -123,10 +124,10 @@ def main() -> None:
     fig = plt.gcf()
     fig.set_size_inches(14, 10)
     _tidy_numeric_axes(fig)
-    fig.savefig(args.outdir / "ic_qq.png", dpi=110, bbox_inches="tight")
+    fig.savefig(outdir / "ic_qq.png", dpi=110, bbox_inches="tight")
     plt.close("all")
 
-    print(f"图片已保存到: {args.outdir}")
+    print(f"图片已保存到: {outdir}")
 
     ic = alphalens.performance.factor_information_coefficient(factor_data)
     summary = pd.DataFrame(
