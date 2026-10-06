@@ -56,12 +56,24 @@ def main() -> None:
     # 1. symbol 统一为 6 位字符串
     df["symbol"] = df["symbol"].astype(str).str.zfill(6)
 
+    # 1b. 剔除前复权负价格（长期高分红股的数学必然，无意义）
+    n_before = len(df)
+    df = df[df["close"] > 0].reset_index(drop=True)
+    n_drop = n_before - len(df)
+    print(f"剔除 close <= 0 的行：{n_drop} 行，剩余 {len(df):,} 行")
+
     # 2. 按 symbol 分组计算 pct_chg（前收盘 -> 今收盘，单位 %）
     print("计算 pct_chg ...")
     df = df.sort_values(["symbol", "date"]).reset_index(drop=True)
     prev_close = df.groupby("symbol")["close"].shift(1)
     df["pct_chg"] = (df["close"] / prev_close - 1) * 100
     # 每只股票第一个交易日没有前收盘，pct_chg 为 NaN，保持 NaN
+
+    # 2b. 剔除 |pct_chg| > 21% 的行（前复权精度陷阱，A 股单日最大 20%）
+    n_before = len(df)
+    df = df[df["pct_chg"].isna() | (df["pct_chg"].abs() <= 21)].reset_index(drop=True)
+    n_drop = n_before - len(df)
+    print(f"剔除 |pct_chg| > 21% 的行：{n_drop} 行，剩余 {len(df):,} 行")
 
     # 3. 板块
     print("标记板块 ...")
