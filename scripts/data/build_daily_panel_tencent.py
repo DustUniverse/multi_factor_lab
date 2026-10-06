@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DAILY_DIR = ROOT / "data" / "raw" / "daily_tencent"
 OUT_PATH = ROOT / "data" / "processed" / "daily_panel_tencent.parquet"
 

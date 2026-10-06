@@ -13,7 +13,7 @@ matplotlib.use("Agg")  # 无 GUI 环境也能出图，必须在 pyplot 之前设
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
-PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
+PROJECT_ROOT: Path = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from mfalpha.common.constants import DATA_DIR, FIGURES_DIR  # noqa: E402

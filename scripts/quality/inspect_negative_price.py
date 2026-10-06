@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "data" / "processed" / "daily_panel_tencent_clean.parquet"
 
 

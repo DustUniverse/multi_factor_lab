@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 UNIVERSE_PATH = ROOT / "data" / "raw" / "universe.parquet"
 DAILY_DIR = ROOT / "data" / "raw" / "daily_tencent"
 

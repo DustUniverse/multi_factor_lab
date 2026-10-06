@@ -12,7 +12,7 @@ import akshare as ak
 import pandas as pd
 
 # scripts/ 下运行时把 src 加进 sys.path，才能 import mfalpha
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))  # noqa: E402
 
 from mfalpha.common.constants import DATA_DIR  # noqa: E402

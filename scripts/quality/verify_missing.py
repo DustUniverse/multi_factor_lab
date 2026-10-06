@@ -11,7 +11,7 @@ from pathlib import Path
 
 import requests
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MISSING_PATH = ROOT / "data" / "raw" / "missing_symbols.txt"
 
 HEADERS = {

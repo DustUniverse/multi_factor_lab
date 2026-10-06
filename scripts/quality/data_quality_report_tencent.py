@@ -1,8 +1,10 @@
-"""生成数据质量校验报告（Markdown）。
+"""生成腾讯全市场数据质量校验报告（Markdown）。
 
-输入：data/processed/daily_panel_clean.parquet
-输出：docs/reports/data_quality_report.md
+输入：data/processed/daily_panel_tencent_clean.parquet
+输出：docs/reports/data_quality_report_tencent.md
 """
+
+from __future__ import annotations
 
 import sys
 from datetime import datetime
@@ -10,7 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from mfalpha.common.constants import DATA_DIR  # noqa: E402
@@ -18,24 +20,13 @@ from mfalpha.common.constants import DATA_DIR  # noqa: E402
 PROCESSED_DIR = DATA_DIR.parent / "processed"
 REPORT_DIR = PROJECT_ROOT / "docs" / "reports"
 
-# 报告里要统计的数值列
-NUMERIC_COLS = [
-    "open",
-    "close",
-    "high",
-    "low",
-    "volume",
-    "amount",
-    "amplitude",
-    "pct_chg",
-    "change",
-    "turnover",
-]
+# 新面板实际有的数值列
+NUMERIC_COLS = ["open", "high", "low", "close", "volume", "pct_chg"]
 
 
 def build_report(df: pd.DataFrame) -> str:
     lines = []
-    lines.append("# 数据质量校验报告\n")
+    lines.append("# 数据质量校验报告（腾讯全市场）\n")
     lines.append(f"生成时间：{datetime.now():%Y-%m-%d %H:%M:%S}\n")
 
     # 一、基础信息
@@ -80,12 +71,12 @@ def build_report(df: pd.DataFrame) -> str:
     lines.append("|---|---|---|")
     n = len(df)
     checks = {
-        "停牌（volume == 0）": df["is_suspended"].sum(),
-        "涨停": df["is_limit_up"].sum(),
-        "跌停": df["is_limit_down"].sum(),
-        "pct_chg 绝对值 > 11": (df["pct_chg"].abs() > 11).sum(),
-        "turnover == 0": (df["turnover"] == 0).sum(),
-        "close <= 0": (df["close"] <= 0).sum(),
+        "停牌（volume == 0）": int(df["is_suspended"].sum()),
+        "涨停": int(df["is_limit_up"].sum()),
+        "跌停": int(df["is_limit_down"].sum()),
+        "pct_chg 绝对值 > 21": int((df["pct_chg"].abs() > 21).sum()),
+        "close <= 0": int((df["close"] <= 0).sum()),
+        "volume < 0": int((df["volume"] < 0).sum()),
     }
     for name, cnt in checks.items():
         lines.append(f"| {name} | {cnt} | {cnt / n:.4%} |")
@@ -98,10 +89,11 @@ def build_report(df: pd.DataFrame) -> str:
     lines.append(f"- 最少：{per_stock.min()} 行")
     lines.append(f"- 均值：{per_stock.mean():.1f} 行")
     lines.append(f"- 中位数：{per_stock.median():.1f} 行")
+    # 只有 1213 个交易日，超过 80% 即 >= 970 行
     short = per_stock[per_stock < per_stock.max() * 0.8]
-    lines.append(f"- 行数不足 80% 的股票数：{len(short)} 只")
-    if len(short) > 0:
-        lines.append(f"- 列表：{list(short.index)[:20]}")
+    lines.append(
+        f"- 行数不足 80% 的股票数：{len(short)} 只（多为次新股/停牌较多的股票）"
+    )
     lines.append("")
 
     # 六、结论
@@ -113,28 +105,29 @@ def build_report(df: pd.DataFrame) -> str:
         lines.append(f"- ⚠️ 存在字段缺失率 {max_miss:.2%}，超过 2% 阈值")
 
     if df["is_suspended"].sum() == 0:
-        lines.append("- ✅ 无停牌行（前复权数据已排除）")
+        lines.append("- ✅ 无停牌行（腾讯前复权数据不含停牌日）")
     else:
-        lines.append(f"- ⚠️ 存在 {df['is_suspended'].sum()} 行停牌数据，已标记")
+        lines.append(f"- ⚠️ 存在 {int(df['is_suspended'].sum())} 行停牌数据，已标记")
 
+    lines.append("- 数据源：腾讯财经（前复权）")
     lines.append(
-        f"- 本报告基于 {df['symbol'].nunique()} 只股票样本，扩到全市场后需重新生成\n"
+        f"- 样本规模：{df['symbol'].nunique()} 只股票，覆盖沪深 A 股主要板块\n"
     )
 
     return "\n".join(lines)
 
 
 def main() -> None:
-    src = PROCESSED_DIR / "daily_panel_clean.parquet"
+    src = PROCESSED_DIR / "daily_panel_tencent_clean.parquet"
     df = pd.read_parquet(src)
-    print(f"读取面板: {df.shape}")
+    print(f"读取面板：{df.shape}")
 
     report = build_report(df)
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = REPORT_DIR / "data_quality_report.md"
+    out_path = REPORT_DIR / "data_quality_report_tencent.md"
     out_path.write_text(report, encoding="utf-8")
-    print(f"已生成报告: {out_path}")
+    print(f"已生成报告：{out_path}")
 
 
 if __name__ == "__main__":

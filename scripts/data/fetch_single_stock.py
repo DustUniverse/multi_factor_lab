@@ -12,7 +12,7 @@ import pandas as pd
 
 # --- 让 Python 找到 src/mfalpha ---
 # 本文件位于 scripts/ 下，上一级是项目根。
-PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
+PROJECT_ROOT: Path = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from mfalpha.common.constants import DATA_DIR  # noqa: E402

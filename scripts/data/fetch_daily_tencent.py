@@ -22,7 +22,7 @@ import pandas as pd
 import requests
 
 # ---------- 路径 ----------
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 UNIVERSE_PATH = ROOT / "data" / "raw" / "universe.parquet"
 OUT_DIR = ROOT / "data" / "raw" / "daily_tencent"
 
