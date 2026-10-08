@@ -1,26 +1,32 @@
-```markdown
-# docs — 文档与图表
+# docs 文档目录
 
-## 文档
+本目录维护项目文档、验收表和阶段报告。根 README 只放总览和索引，详细文档放在这里。
+
+## 文件索引
 
 | 文件 | 说明 |
 |---|---|
-| `stage1_checklist.md` | **阶段一验收表**（已通过 ✅） |
-| `reports/data_quality_report_tencent.md` | 数据质量报告（当前版本，腾讯源） |
-| `reports/data_quality_report.md` | 数据质量报告（历史版本） |
+| `stage1_checklist.md` | 阶段一验收表，状态：全部通过 ✅ |
+| `reports/data_quality_report_tencent.md` | 腾讯前复权数据质量报告，单字段缺失率 < 2% |
 
-## 图表
+## 阶段一文档
 
-| 目录 / 文件 | 说明 |
-|---|---|
-| `figures/close_600519.png` | 贵州茅台收盘价示例图 |
-| `figures/alphalens_ic/momentum_20/` | momentum_20 因子 IC 分析图（hist / qq / ts） |
-| `figures/alphalens_ic/volatility_20/` | volatility_20 因子 IC 分析图 |
+- 数据覆盖：4853 只股票（96.5%）
+- 时间跨度：2019-09-30 ~ 2024-09-30，1213 个交易日
+- 因子库：18 个
+- 单元测试：59 passed
 
-生成脚本见 [../scripts/README.md](../scripts/README.md) 中的 `analyze_factor.py` 与 `plot_close.py`。
+## 阶段二文档计划
 
-## 维护规范
+| 文档 | 内容 | 状态 |
+|---|---|---|
+| `reports/factor_ic_report.md` | 18 因子 IC / ICIR / 分层收益汇总 | 待创建 |
+| `reports/neutralization_report.md` | 行业、市值中性化说明与结果 | 待创建 |
+| `reports/backtest_report.md` | 回测骨架、净值曲线、绩效指标 | 待创建 |
+| `reports/attribution_report.md` | 收益归因分析 | 待创建 |
 
-- 数据质量报告、验收表等长期文档放 `reports/` 或 `docs/` 根目录
-- 单因子 IC 图放 `figures/alphalens_ic/<因子名>/`
-- 阶段验收表命名：`stageN_checklist.md`
+## 维护规则
+
+- 新增报告后，在本 README 和根 README 的“子目录 README 索引”中同步更新。
+- 报告文件名建议使用小写英文 + 下划线，例如 `factor_ic_report.md`。
+- 涉及数据的结论必须写清楚数据区间、股票池、因子版本和运行脚本。
