@@ -7,7 +7,8 @@
 | 文件 | 说明 | 状态 |
 |---|---|---|
 | `stage1_checklist.md` | 阶段一验收表 | 全部通过 ✅ |
-| `stage2_final_report.md` | 阶段二完整报告（353 行），含统计、图表、因子清单 | 已完成 ✅ |
+| `stage2_final_report.md` | 阶段二完整报告（353 行） | 已完成 ✅ |
+| `stage3_final_report.md` | 阶段三最终报告 | 🚧 待创建（M8） |
 | `reports/data_quality_report_tencent.md` | 腾讯前复权数据质量报告，单字段缺失率 < 2% | 已完成 ✅ |
 
 ## 阶段一文档
@@ -19,14 +20,14 @@
 
 ## 阶段二文档
 
-`stage2_final_report.md` 是阶段二的核心交付物，覆盖：
+`stage2_final_report.md` 覆盖 M2–M7 全流程：
 
-- M2：18 因子 IC / IR / 胜率 / t 值，20D 口径下 12 因子通过初筛
-- M3：十分位分层回测，`turnover` 多空夏普 8.12、`amihud_20` 7.86
-- M4：市值 / 行业中性化，ICIR 全部改善，`turnover` Sharpe → 14.04
-- M5：VIF 迭代 4 轮，最终保留 8 因子，全部 `vif_mean < 5`、`vif_median < 4`
-- M6：牛熊 / 分板块稳健性（bull 32.1% / flat 51.6% / bear 16.2%），8 因子三状态全部显著
-- M7：中性化暴露复核（\|β\|<0.02、R²<0.05）、多周期显著性汇总、分市值 IC、"小盘 alpha" 现象
+- 18 因子 IC / IR / 胜率 / t 值 → 12 因子初筛通过
+- 十分位分层回测，`turnover` 多空夏普 8.12、`amihud_20` 7.86
+- 市值 / 行业中性化，ICIR 全部改善
+- VIF 迭代 4 轮，最终保留 8 因子
+- 牛熊 / 分板块稳健性：8 因子三状态全部显著
+- M7 补检：暴露复核、多周期显著性、分市值 IC
 
 阶段二验收对照（全部达标）：
 
@@ -35,22 +36,32 @@
 | IC\|≥0.03、IR≥0.3 的有效因子 ≥ 8 | 8 个 ✅ |
 | 因子 VIF < 5 | 全部达标 ✅ |
 | 中性化后市值 / 行业暴露 ≈ 0 | \|β\|<0.02、R²<0.05 ✅ |
-| 有效因子 ≥2 种环境显著 | 全部因子 3 种环境全部显著 ✅ |
+| 有效因子 ≥2 种环境显著 | 3 种环境全部显著 ✅ |
 | 稳健性覆盖 ≥3 种环境 | bull / flat / bear ✅ |
 | 报告含完整统计 + 图表 | 353 行 Markdown ✅ |
 
 ## 阶段三文档计划
 
-| 文档 | 内容 | 状态 |
-|---|---|---|
-| `reports/factor_combination_report.md` | 多因子合成：IC 加权 / ICIR 加权 / 最大化 ICIR，组合前后对比 | 待创建 |
-| `reports/portfolio_optimization_report.md` | 组合优化：暴露约束下均值-方差优化 | 待创建 |
-| `reports/backtest_report.md` | 策略回测：月频调仓、top-N、扣费后净值 | 待创建 |
-| `reports/attribution_report.md` | 收益归因分析 | 待创建 |
+| 文档 | 内容 | 里程碑 | 状态 |
+|---|---|---|---|
+| `reports/benchmark_setup.md` | 沪深 300 基准与调仓日历说明 | M1 | 待创建 |
+| `reports/factor_composite_report.md` | 线性 + 非线性合成方案与对比 | M2–M3 | 待创建 |
+| `reports/backtest_engine_report.md` | 自研事件驱动引擎设计与对照策略验证 | M4–M5 | 待创建 |
+| `reports/metrics_report.md` | 绩效指标定义与单测覆盖 | M6 | 待创建 |
+| `reports/backtrader_reconciliation.md` | Backtrader 交叉验证与逐级对账记录 | M7 | 待创建 |
+| `stage3_final_report.md` | 阶段三最终报告（含净值曲线图） | M8 | 待创建 |
+
+## 阶段三验收指标
+
+- 年化超额收益 **≥ 8%**
+- Sharpe **≥ 1.2**
+- Backtrader 与自研引擎误差 **< 2%**
+- 无未来函数（合成权重滚动到时点、事件驱动信号 / 成交严格错开）
 
 ## 维护规则
 
 - 新增报告后，在本 README 和根 README 的"子目录 README 索引"中同步更新。
-- 报告文件名建议使用小写英文 + 下划线，例如 `factor_combination_report.md`。
+- 报告文件名建议使用小写英文 + 下划线，例如 `factor_composite_report.md`。
 - 涉及数据的结论必须写清楚数据区间、股票池、因子版本和运行脚本。
 - 阶段报告建议同步维护"验收标准对照表"，方便带教快速核对。
+- 每个里程碑结束后更新对应行的状态，不要等 M8 一起写。
