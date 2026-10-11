@@ -43,3 +43,4 @@ python -m pytest
 | 预期值差 1 天 | 检查 `pct_change()` 与 `min_periods` |
 | MACD 暖机期不符 | 暖机期是 `slow + signal - 2` |
 | 财务对齐不符 | 检查是否按 `ann_date` 而非 `end_date` |
+| 因子方向翻转后测试不符 | 检查是否误改了原始因子函数，翻转应在最终因子库阶段处理 |

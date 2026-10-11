@@ -1,6 +1,6 @@
 # mfalpha 核心包
 
-`src/mfalpha` 是项目核心 Python 包，提供数据对齐、因子计算和后续检验/回测所需的基础模块。
+`src/mfalpha` 是项目核心 Python 包，提供数据对齐、因子计算和后续检验 / 回测所需的基础模块。
 
 ## 目录说明
 
@@ -22,7 +22,8 @@ src/mfalpha/
 - 参数：统一使用 `window` 参数；
 - 输出：与输入等长的 `pd.Series`；
 - 暖机期不足时返回 `NaN`；
-- 滚动窗口的 `min_periods` 与 `window` 保持一致。
+- 滚动窗口的 `min_periods` 与 `window` 保持一致；
+- 阶段二最终 8 因子方向已统一为"值越大 → 预期收益越高"，翻转只需乘 −1，不需重新标准化。
 
 ## PIT 对齐
 
@@ -57,3 +58,10 @@ python -m pytest tests
 ```
 
 当前核心包相关测试均通过，总计 59 passed。
+
+## 与阶段二的衔接
+
+阶段二的检验、中性化、稳健性脚本位于 `scripts/validation/`，直接读取 `src/mfalpha` 计算出的因子面板。
+
+- 最终 8 因子清单：`data/processed/final_factor_list.csv`
+- 最终因子面板：`data/processed/factor_panel_final.parquet`（5,045,205 × 8，MultiIndex，方向已统一）
