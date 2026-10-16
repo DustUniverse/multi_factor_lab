@@ -43,6 +43,8 @@ GROUPS = [
     ("ic_no_vol", "IC加权 · 剔vol"),
     ("ir_no_vol", "IR加权 · 剔vol"),
     ("equal_no_vol", "等权 · 剔vol"),
+    ("lasso_all8", "Lasso · 8因子"),
+    ("lasso_no_vol", "Lasso · 剔vol"),
 ]
 
 TOP_N = 50
