@@ -1,6 +1,6 @@
-"""M5b: 6 组合成策略回测 + 沪深 300 对照。
+"""M5b: 8 组合成策略回测 + 沪深 300 对照。
 
-对 6 组（3 加权 × 2 因子集）合成分数，用同一引擎跑 top_n=50 月频回测，
+对 8 组（含 Lasso 非线性合成）合成分数，用同一引擎跑 top_n=50 月频回测，
 与沪深 300 对比，输出绩效汇总表与净值曲线。
 
 用法（项目根目录、激活 .venv 后）：
@@ -107,7 +107,7 @@ def plot_navs(navs: dict[str, pd.Series], bench_nav: pd.Series) -> Path:
         color="black",
         linewidth=1.6,
     )
-    ax.set_title("阶段三：6 组合成策略 净值对比（top_n=50, 月频）")
+    ax.set_title("阶段三：8 组合成策略 净值对比（top_n=50, 月频）")
     ax.set_xlabel("Date")
     ax.set_ylabel("Cumulative NAV")
     ax.grid(alpha=0.3)
@@ -120,7 +120,7 @@ def plot_navs(navs: dict[str, pd.Series], bench_nav: pd.Series) -> Path:
 
 
 def main() -> None:
-    print("[M5b] 6 组合成策略回测 ...")
+    print("[M5b] 8 组合成策略回测 ...")
     cal = load_calendar()
     print(f"  调仓点数: {len(cal)}")
 
@@ -201,7 +201,7 @@ def main() -> None:
     print(f"  净值曲线保存: {fig_path}")
 
     # 打印完整表
-    print("\n  === 6 组完整绩效 ===")
+    print("\n  === 8 组完整绩效 ===")
     cols = [
         "label",
         "ann_return",
