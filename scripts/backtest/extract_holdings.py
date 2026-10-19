@@ -1,19 +1,22 @@
-"""M7-a: 提取 ic_no_vol 策略每期持仓明细。
+"""M7-a: 提取组合策略每期持仓明细。
 
 在 run_composite_backtest.py 里，持仓是用 engine.run_backtest 内部决定的，
 没有落盘。本脚本重放同样的逻辑（含信号平滑 3 期 + 涨跌停过滤），
 生成每期持仓的明细表，供 Backtrader 复现使用。
 
 输出：
-    data/processed/composite_holdings_ic_no_vol.csv
-        trade_date, symbol, rank
+    data/processed/composite_holdings_{group}.csv
+        signal_date, trade_date, symbol, rank
 
 用法（项目根目录、激活 .venv 后）：
-    python scripts/backtest/extract_holdings.py
+    python scripts/backtest/extract_holdings.py                      # 默认 ic_no_vol
+    python scripts/backtest/extract_holdings.py --group lasso_all8   # 阶段四归因用
 """
 
 from __future__ import annotations
 
+# [T0 改动 1] 新增 argparse
+import argparse
 import sys
 from pathlib import Path
 
@@ -23,11 +26,21 @@ _THIS = Path(__file__).resolve()
 _ROOT = _THIS.parents[2]
 sys.path.insert(0, str(_ROOT))
 
+# [T0 改动 2] 删除硬编码的 SCORE_PATH / OUT_PATH，改为按组名动态拼接
 PROCESSED = _ROOT / "data" / "processed"
-SCORE_PATH = PROCESSED / "composite_scores_ic_no_vol.parquet"
 PRICE_PATH = PROCESSED / "daily_panel_tencent_clean.parquet"
 CAL_PATH = PROCESSED / "rebalance_calendar.csv"
-OUT_PATH = PROCESSED / "composite_holdings_ic_no_vol.csv"
+
+GROUPS = [
+    "ic_no_vol",
+    "ir_no_vol",
+    "equal_no_vol",
+    "lasso_no_vol",
+    "ic_all8",
+    "ir_all8",
+    "equal_all8",
+    "lasso_all8",
+]
 
 TOP_N = 50
 SMOOTH_N = 3
@@ -40,8 +53,26 @@ def normalize_symbol(s: pd.Series) -> pd.Series:
 
 
 def main() -> None:
-    print("[M7-a] 提取 ic_no_vol 持仓 ...")
-    scores = pd.read_parquet(SCORE_PATH)
+    # [T0 改动 3] 解析 --group 参数，默认 ic_no_vol（阶段三行为不变）
+    parser = argparse.ArgumentParser(description="提取组合每期持仓明细")
+    parser.add_argument(
+        "--group",
+        default="ic_no_vol",
+        choices=GROUPS,
+        help="组合名称，默认 ic_no_vol（阶段三行为不变）",
+    )
+    args = parser.parse_args()
+    group = args.group
+
+    score_path = PROCESSED / f"composite_scores_{group}.parquet"
+    out_path = PROCESSED / f"composite_holdings_{group}.csv"
+    if not score_path.exists():
+        raise FileNotFoundError(
+            f"找不到 {score_path}，请先运行 composite_factors*.py 生成该组分数"
+        )
+
+    print(f"[T0] 提取 {group} 持仓 ...")
+    scores = pd.read_parquet(score_path)
     scores.index = pd.to_datetime(scores.index)
     scores = scores.sort_index()
     print(f"  分数面板: {scores.shape}")
@@ -103,12 +134,13 @@ def main() -> None:
             )
 
     out = pd.DataFrame(rows)
-    out.to_csv(OUT_PATH, index=False)
+    # [T0 改动 4] OUT_PATH → out_path
+    out.to_csv(out_path, index=False)
     print(f"  持仓明细行数: {len(out)}")
     print(f"  有效调仓期:   {out['trade_date'].nunique()}（跳过 {n_skipped}）")
     print(f"  涉及的股票数: {out['symbol'].nunique()}")
     print(f"  每期持仓数:   {out.groupby('trade_date').size().describe().to_dict()}")
-    print(f"  保存到: {OUT_PATH}")
+    print(f"  保存到: {out_path}")
 
 
 if __name__ == "__main__":
