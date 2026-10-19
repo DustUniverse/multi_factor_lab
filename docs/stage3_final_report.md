@@ -503,23 +503,6 @@ python scripts\backtest\run_backtrader_ic_no_vol.py
 | `a86a30a` | feat: M5b 回测脚本支持 Lasso 组（8 组配置） |
 | `c387c6d` | chore: 回测脚本文案 6 组 → 8 组 |
 
-待提交：
-
-```text
-docs/stage3_final_report.md
-```
-
-建议提交：
-
-```powershell
-git add docs/stage3_final_report.md
-git commit -m "docs: M8 阶段三最终报告（8 组合成 + BT 交叉验证 + 带教反馈响应）"
-git push
-```
-
-注意：上述 3 条 commit 目前还未 push，执行 `git push` 会一起推送。
-
----
 
 ## 附录 D：关键技术决策记录
 
@@ -553,15 +536,6 @@ git push
 
 1. Backtrader 对账精度：相关系数 > 0.95、年化差 < 2% 是否足够。
 2. 是否需要补 XGBoost 版：任务书写“Lasso 或 XGBoost”，当前 Lasso 已完成。
-3. 报告格式：Markdown / Word / 公司模板。
-
 ---
 
-## 附录 G：可选优化
 
-- 行业 / 市值中性约束版。
-- XGBoost 非线性合成。
-- 交易成本敏感性：0.4% → 0.8%。
-- 双月调仓。
-- Lasso 系数滚动稳定性图。
-- 分行业、分市值收益归因。
