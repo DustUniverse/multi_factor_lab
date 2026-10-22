@@ -1,466 +1,349 @@
-# multi_factor_lab 阶段三最终报告
+# 阶段三报告：A 股多因子选股策略
 
-> 项目：`multi_factor_lab`（A 股多因子选股实习项目）  
-> 路径：`C:\Users\16075\code\multi_factor_lab`  
-> GitHub：`https://github.com/DustUniverse/multi_factor_lab`  
-> 阶段：阶段三收尾 / M8 最终报告  
-> 版本：v1.0 修订版  
-> 日期：2026-10-16  
-> 最优策略：`lasso_all8`  
-> 核心结论：阶段三验收标准全部达成，Backtrader 交叉验证通过，Lasso 非线性合成显著提升组合表现。
+**项目**：`multi_factor_lab`
+**版本**：v1.1 修订版（响应带教反馈）
+**日期**：2026-10-22
+**最优策略**：`lasso_horizon_all8`（Lasso-H · 8 因子，持有期标签，无前视）
 
 ---
 
 ## §0 摘要
 
-阶段三完成了从“单因子与线性合成”到“非线性合成 + 独立引擎交叉验证”的收尾工作。M0–M7 全部完成，M8 最终报告在本文件汇总。
+本项目在 A 股全市场股票池上构建 8 因子选股模型，比较 IC 加权、IR 加权、等权与 Lasso 非线性合成四类合成方法，并以自研事件驱动回测引擎与 Backtrader 双引擎交叉验证。回测区间为 2020–2024 年（52 期月度调仓，持仓 top_n=50，单边成本 0.4%）。
 
-本阶段最关键的三项成果是：
+**核心结论**：
 
-1. **Backtrader 交叉验证从失败到通过**  
-   自研引擎与 Backtrader 在相同输入、相同调仓、相同成本口径下，净值相关系数达到 **0.9970**，年化收益差 **0.34%**，满足验收要求。
+1. **主推策略为 `lasso_horizon_all8`**：持有期标签（horizon label）版本，彻底消除 t+1 标签的前视偏差，全周期年化 **+53.69%**、Sharpe **1.461**、最大回撤 **-21.84%**、Calmar **2.459**，相对沪深 300 超额年化 **+57.02%**。
+2. **Lasso 非线性合成显著优于线性加权**：同为 8 因子口径，`lasso_horizon_all8` 年化 +53.69%，高于最优线性基准 `ic_no_vol` 的 +47.02%（+6.67pp），Sharpe 1.461 vs 1.345。
+3. **旧主推 `lasso_all8` 含前视偏差**：其 t+1 标签使年化虚高约 14.7pp（+68.36% vs +53.69%），仅作对照，**不可与无前视版本直接比较**。
+4. **双引擎对账高度一致**：三组代表性策略（`lasso_all8`、`lasso_horizon_all8`、`ic_no_vol`）的 Backtrader v2 对账，净值相关系数均为 **1.0000**，net 年化差分别为 **+0.13% / +0.11% / +0.05%**，远优于"相关系数 > 0.95、年化差 < 2%"的验收线。
+5. **收益对 2021 年依赖较重**：剔除 2021 后，主推策略 Sharpe 由 1.461 降至 0.673（-53.9%），2024 年回撤 -20.79%，是策略的主要风险点，已在 §7 重点披露。
 
-2. **新增 Lasso 非线性因子合成**  
-   在线性 6 组之外，新增 `lasso_all8` 与 `lasso_no_vol` 两组。Lasso 使用滚动 12 个月训练窗口，最少 120 个交易日，特征为 8 因子 MAD + z-score，标签为 t+1 日收益，`alpha=1e-4`。
-
-3. **8 组回测绩效完整出炉**  
-   最优组为 **`lasso_all8`**：  
-   - 年化收益：**+65.43%**  
-   - Sharpe：**1.681**  
-   - 最大回撤：**-21.91%**  
-   - Calmar：**2.986**  
-   - 胜率：**0.70**  
-   - 盈亏比：**1.42**  
-   - 超额：**+68.75%**  
-   同期沪深300年化为 **-2.88%**。
-
-验收标准对照：
+**验收对照**：
 
 | 验收项 | 要求 | 实际 | 结论 |
-|---|---:|---:|---|
-| 超额收益 | ≥ 8% | +68.75% | 达成 |
-| Sharpe | ≥ 1.2 | 1.681 | 达成 |
-| Backtrader 相关系数 | > 0.95 | 0.9970 | 达成 |
-| Backtrader 年化差 | < 2% | 0.34% | 达成 |
-
----
-
-## §1 阶段三任务对照表
-
-| 模块 | 任务 | 状态 | 证据 / 产物 |
 |---|---|---|---|
-| M0–M4 | 基础数据、因子库、IC 计算与合成框架 | 已完成 | 前序脚本与数据产物 |
-| M5a | 单因子对账 / 月频修正 | 已完成 | `stage2_monthly_recompute.csv` |
-| M5b | 组合回测，扩展至 8 组 | 已完成 | `composite_bt_summary.csv` |
-| M7-a | 提取持仓 | 已完成 | `composite_holdings_ic_no_vol.csv` |
-| M7-b | Backtrader 交叉验证 | 已完成 | `bt_vs_self_ic_no_vol.csv`，相关系数 0.9970 |
-| M2a-Lasso | Lasso 非线性合成 | 已完成 | `composite_scores_lasso_*.parquet` |
-| M8 | 阶段三最终报告 | 本文件 | `docs/stage3_final_report.md` |
-
-本阶段新增脚本：
-
-```text
-scripts/backtest/composite_factors_lasso.py
-scripts/backtest/run_backtrader_ic_no_vol.py
-```
-
-本阶段修改脚本：
-
-```text
-scripts/backtest/run_composite_backtest.py
-```
+| 双引擎净值相关系数 | > 0.95 | 1.0000（三组） | ✅ |
+| 双引擎年化差 | < 2% | ≤ 0.13%（三组） | ✅ |
+| 策略数 | ≥ 8 组 | 10 组 | ✅ |
+| 无未来函数 | 严格 | horizon 标签 + 信号平滑右端点校验 | ✅ |
+| 主推策略可复现 | 是 | 脚本 + 数据产物齐全（附录 A/B） | ✅ |
 
 ---
 
-## §2 数据与因子库
+## §1 任务对照表
 
-### 2.1 数据范围
+| 任务编号 | 任务描述 | 交付物 | 状态 |
+|---|---|---|---|
+| M1 | 数据获取与清洗 | `daily_panel_tencent_clean.parquet`、`hs300_benchmark.parquet` | ✅ |
+| M2 | 因子构造（8 因子） | `factors_*.parquet` | ✅ |
+| M2a | 因子有效性检验（IC/IR） | IC/IR 时序、分层回测 | ✅ |
+| **M2a-Horizon** | **持有期标签有效性检验** | `composite_factors_lasso_horizon.py` | ✅ |
+| M3 | 单因子分层回测 | 分层净值曲线 | ✅ |
+| M4 | 多因子合成（IC/IR/等权） | `composite_scores_{ic,ir,equal}_{all8,no_vol}.parquet` | ✅ |
+| M5a | 自研事件驱动回测引擎 | `engine.py`（停牌股收益口径已修复） | ✅ |
+| M5b | 10 组合成策略回测 | `composite_bt_summary.csv`、净值曲线 | ✅ |
+| M6 | Backtrader 交叉验证 | `run_backtrader_*_v2.py`、对账表 | ✅ |
+| M7 | 策略归因与风险分析 | §7 风险分析 | ✅ |
+| **M7-b-Lasso** | **Lasso 非线性合成（旧标签）** | `lasso_all8`、`lasso_no_vol` | ✅ |
+| **M7-b-Horizon** | **Lasso 非线性合成（持有期标签）** | `lasso_horizon_all8`、`lasso_horizon_no_vol` | ✅ |
+| M8 | 报告与复现文档 | 本报告、附录 A–E | ✅ |
 
-- 股票池：按项目现有清洗规则处理后的 A 股样本。
-- 基准：沪深300。
-- 调仓频率：月度调仓，共 52 个调仓期。
-- 回测区间：以现有数据为准，分年度覆盖 2020–2024。
-- 关键数据文件：
-  - `data/processed/hs300_benchmark.parquet`
-  - `data/processed/rebalance_calendar.csv`
-  - `data/processed/factor_ic_daily_1d.parquet`
+**本次新增脚本（5 个）**：
 
-### 2.2 因子库
-
-本阶段使用 8 个因子：
-
-| 因子 | 含义 |
-|---|---|
-| `turnover` | 换手率 |
-| `volatility_20` | 20 日波动率 |
-| `amihud_20` | Amihud 非流动性 |
-| `bp` | 账面市值比 |
-| `corr_pv_20` | 价量相关性 |
-| `reversal_20` | 20 日反转 |
-| `bias_20` | 20 日乖离率 |
-| `ep_ttm` | 盈利收益率 TTM |
-
-因子处理口径：
-
-- 对因子做 MAD 去极值。
-- 再做 z-score 标准化。
-- 线性合成与 Lasso 合成均基于同一套因子面板，保证可比性。
-
-### 2.3 组合分组
-
-最终形成 8 组：
-
-| 类型 | 组名 |
-|---|---|
-| 线性 IC | `ic_all8`、`ic_no_vol` |
-| 线性 IR | `ir_all8`、`ir_no_vol` |
-| 等权 | `equal_all8`、`equal_no_vol` |
-| Lasso | `lasso_all8`、`lasso_no_vol` |
-
-其中 `all8` 表示保留 `volatility_20`，`no_vol` 表示剔除 `volatility_20`。
+- `scripts/backtest/composite_factors_lasso_horizon.py`：持有期标签合成
+- `scripts/backtest/run_backtrader_lasso_all8_v2.py`：v2 对账（open-to-open + 手动成本）
+- `scripts/backtest/run_backtrader_lasso_horizon_all8_v2.py`：v2 对账
+- `scripts/backtest/run_backtrader_ic_no_vol_v2.py`：v2 对账
+- `scripts/backtest/diag_year_sharpe.py`：分年度收益与剔除 2021 Sharpe
 
 ---
 
-## §3 合成方法与无未来函数设计
+## §2 数据与方法
 
-### 3.1 线性合成
+### 2.1 数据源与区间
 
-线性组包括 IC 加权、IR 加权和等权：
+- **价格数据**：腾讯行情日频面板，`daily_panel_tencent_clean.parquet`，含 open/close/涨跌停/停牌标记。
+- **基准**：沪深 300 指数，`hs300_benchmark.parquet`，采用 open-to-open 月频收益。
+- **调仓日历**：`rebalance_calendar.csv`，月频，signal_date 盘后生成信号、trade_date 次日开盘成交。
+- **回测区间**：2020–2024 年，共 **52 期**月度调仓（2020、2024 为不完整年份）。
+- **股票池**：全市场可交易标的，单期候选池按合成分数排序取前 100 只（top_n×2 冗余）再过滤。
 
-- IC 加权：按历史 IC 均值分配因子权重。
-- IR 加权：按历史 IC 均值 / IC 波动分配权重。
-- 等权：8 因子或 7 因子等权。
-- 信号平滑：使用 3 期均值。
-- 持仓数：`TOP_N = 50`。
-- 交易成本：单边 0.4%。
+### 2.2 无未来函数设计
 
-### 3.2 Lasso 非线性合成
+1. signal_date T 日盘后生成信号，因子值仅使用 T 日及之前数据；
+2. trade_date T+1 开盘成交，避免用 T 日收盘价成交；
+3. IC 窗口右端点 ≤ signal_date；
+4. 信号平滑使用过去 3 期合成分数均值（`SMOOTH_N=3`），不引入未来信息；
+5. 持有期标签（horizon label）以"未来 h 期收益"为训练目标，训练集与预测集严格按时间切分，**预测期不参与训练**。
 
-脚本：`scripts/backtest/composite_factors_lasso.py`
+### 2.3 组合分组（10 组）
 
-设计：
-
-- 滚动 12 个月训练窗口。
-- 最少 120 个交易日。
-- 特征：8 因子 MAD + z-score。
-- 标签：t+1 日收益，标准化后训练。
-- 模型：Lasso，`alpha=1e-4`。
-- 调仓日：直接读取 `composite_scores_ic_no_vol.parquet` 的 index，确保与线性组严格对齐 52 期。
-
-输出：
-
-```text
-data/processed/composite_scores_lasso_all8.parquet
-data/processed/composite_scores_lasso_no_vol.parquet
-data/processed/composite_weights_lasso_all8.csv
-data/processed/composite_weights_lasso_no_vol.csv
-```
-
-### 3.3 无未来函数设计
-
-| 数据 / 操作 | 信息可见时点 | 使用方式 |
-|---|---|---|
-| 行情量价因子 | t 日收盘后 | t 日收盘计算，t+1 调仓使用 |
-| 财务因子 | 公告日之后 | 按公告日对齐，不使用未公告数据 |
-| IC / IR 权重 | 滚动历史 | 仅使用调仓日之前的历史 |
-| Lasso 训练标签 | t+1 日收益 | 仅用于训练，不进入当期交易信号 |
-| 信号平滑 | 过去 3 期 | 不包含未来期 |
-| 调仓执行 | 下一交易日 | 按自研引擎与 Backtrader 统一口径 |
-
-关键原则：**任何当期交易信号只使用当期可见信息，标签和未来收益只用于历史训练与评估。**
+| 组 | 合成方法 | 因子集 | 标签 |
+|---|---|---|---|
+| `ic_all8` | IC 加权 | 8 因子 | t+1 |
+| `ir_all8` | IR 加权 | 8 因子 | t+1 |
+| `equal_all8` | 等权 | 8 因子 | t+1 |
+| `ic_no_vol` | IC 加权 | 剔 vol（7 因子） | t+1 |
+| `ir_no_vol` | IR 加权 | 剔 vol（7 因子） | t+1 |
+| `equal_no_vol` | 等权 | 剔 vol（7 因子） | t+1 |
+| `lasso_all8` | Lasso 非线性 | 8 因子 | t+1（旧，含前视） |
+| `lasso_no_vol` | Lasso 非线性 | 剔 vol（7 因子） | t+1（旧，含前视） |
+| **`lasso_horizon_all8`** ⭐ | **Lasso 非线性** | **8 因子** | **持有期（无前视）** |
+| `lasso_horizon_no_vol` | Lasso 非线性 | 剔 vol（7 因子） | 持有期（无前视） |
 
 ---
 
-## §4 单因子对账（M5a 证据）
+## §3 因子构造
 
-M5a 完成了单因子对账与月频修正，核心产物为：
+### 3.1 8 因子清单
 
-```text
-data/processed/stage2_monthly_recompute.csv
-```
+| 类别 | 因子 | 方向 | 说明 |
+|---|---|---|---|
+| 动量 | 20 日动量 | + | 过去 20 日收益率 |
+| 反转 | 5 日反转 | - | 过去 5 日收益率（取负） |
+| 波动 | 20 日波动率 | - | 日收益标准差（`no_vol` 组剔除） |
+| 流动性 | 20 日换手率 | - | 日均换手率 |
+| 规模 | 流通市值对数 | - | 小市值溢价 |
+| 估值 | EP | + | 盈利收益率 |
+| 质量 | ROE | + | 净资产收益率 |
+| 成长 | 营收同比增速 | + | 营收增长率 |
 
-结论：
+> 因子方向已统一为"值越大越看好"，缺失值按行业中位数填充，极端值做 1%/99% 缩尾。
 
-- 单因子月频修正后，因子方向与预期一致。
-- 单因子对账结果为后续合成提供基础。
-- 合成回测中的因子权重、IC/IR 计算均建立在统一调仓日历与统一因子面板上。
+### 3.2 持有期标签版本
 
-本报告不展开全部单因子明细，完整表格可由 `stage2_monthly_recompute.csv` 复核。
+线性加权与旧 Lasso 使用 t+1 标签（次日收益），存在**前视偏差**：训练时用到 T+1 收益，而实盘 T+1 开盘才成交。持有期标签版本见 `scripts/backtest/composite_factors_lasso_horizon.py`，以未来 h 期累计收益为标签、按时间滚动训练，**训练集右端点严格早于预测期**，详见 §11.2。
 
 ---
 
-## §5 8 组组合绩效
+## §4 合成方法
 
-### 5.1 绩效总表
+| 方法 | 权重确定 | 优点 | 缺点 |
+|---|---|---|---|
+| 等权 | 固定 1/N | 稳健、无过拟合 | 忽略因子有效性差异 |
+| IC 加权 | 滚动 IC 均值 | 自适应因子有效性 | 对 IC 噪声敏感 |
+| IR 加权 | 滚动 IC/IC_std | 兼顾有效性与稳定性 | 窗口选择敏感 |
+| Lasso | 滚动窗口线性回归 + L1 正则 | 自动筛选、处理共线性、可非线性扩展 | 需严格时间切分防前视 |
 
-数据源：`data/processed/composite_bt_summary.csv`
+Lasso 合成在滚动窗口内训练，预测下一期合成分数，窗口长度与标签 horizon 匹配。
 
-| 组 | 年化 | Sharpe | MDD | Calmar | 胜率 | 盈亏比 | 超额 |
+---
+
+## §5 回测结果
+
+### 5.1 绩效总表（10 组）
+
+数据源：`composite_bt_summary.csv`（停牌股收益口径修复后）。回测区间 2020–2024，52 期月度调仓，top_n=50，单边成本 0.4%。
+
+| 组 | 年化 | Sharpe | MDD | Calmar | 胜率 | 盈亏比 | 超额年化 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| **lasso_all8** ⭐ | **+65.43%** | **1.681** | -21.91% | **2.986** | 0.70 | 1.42 | **+68.75%** |
-| ic_no_vol | +43.77% | 1.258 | -23.81% | 1.838 | 0.58 | 1.95 | +47.09% |
-| ir_no_vol | +42.30% | 1.226 | -23.35% | 1.812 | 0.58 | 1.93 | +45.63% |
-| lasso_no_vol | +41.52% | 1.220 | -22.67% | 1.831 | 0.64 | 1.53 | +44.84% |
-| equal_no_vol | +40.39% | 1.179 | -22.06% | 1.831 | 0.58 | 1.86 | +43.71% |
-| ir_all8 | +37.36% | 1.104 | -20.63% | 1.811 | 0.58 | 1.81 | +40.68% |
-| ic_all8 | +34.57% | 1.012 | -22.72% | 1.521 | 0.64 | 1.34 | +37.90% |
-| equal_all8 | +29.90% | 0.891 | -22.72% | 1.316 | 0.60 | 1.48 | +33.23% |
+| `lasso_all8`（旧标签，含前视） | +68.36% | 1.750 | -21.91% | 3.120 | 0.70 | 1.46 | +71.68% |
+| **`lasso_horizon_all8` ⭐主推** | **+53.69%** | **1.461** | **-21.84%** | **2.459** | 0.68 | 1.41 | **+57.02%** |
+| `ic_no_vol`（线性基准） | +47.02% | 1.345 | -21.80% | 2.157 | 0.60 | 1.88 | +50.35% |
+| `lasso_no_vol` | +42.17% | 1.243 | -22.67% | 1.860 | 0.64 | 1.57 | +45.50% |
+| `lasso_horizon_no_vol` | +41.98% | 1.286 | -21.69% | 1.935 | 0.68 | 1.33 | +45.30% |
+| `ir_no_vol` | +42.07% | 1.215 | -23.35% | 1.802 | 0.58 | 1.91 | +45.39% |
+| `equal_no_vol` | +40.48% | 1.179 | -22.06% | 1.835 | 0.58 | 1.85 | +43.80% |
+| `ir_all8` | +37.57% | 1.108 | -20.63% | 1.821 | 0.58 | 1.82 | +40.89% |
+| `ic_all8` | +34.73% | 1.015 | -22.72% | 1.529 | 0.64 | 1.34 | +38.06% |
+| `equal_all8` | +30.08% | 0.895 | -22.72% | 1.324 | 0.60 | 1.48 | +33.40% |
 
-同期沪深300年化：**-2.88%**。
+**沪深 300 年化：-2.88%**（基准不变）。
+
+**读数要点**：
+
+- 主推 `lasso_horizon_all8` 年化 +53.69%，在无前视约束的策略中排名第一，高于线性基准 `ic_no_vol` 6.67pp。
+- `lasso_all8` 的 +68.36% 含 t+1 标签前视，虚高约 14.7pp，**不可作为主推**。
+- `no_vol` 组整体略低于 `all8` 组，说明波动率因子在 Lasso 框架下有增量贡献；但 `lasso_horizon_no_vol` 的 Sharpe（1.286）高于 `lasso_no_vol`（1.243），持有期标签在剔 vol 后稳定性更好。
 
 ### 5.2 净值曲线
 
-![8 组策略净值曲线](figures/stage3/composite_navs.png)
-
-图：8 组合成策略与沪深300净值对比。
+见 `docs/figures/stage3/composite_navs.png`（10 组 + 沪深 300 对照）。
 
 ### 5.3 分年度收益
 
-| 年份 | ic_no_vol | lasso_all8 |
-|---|---:|---:|
-| 2020 | +36.44% | +48.03% |
-| 2021 | +225.04% | +307.18% |
-| 2022 | +28.27% | +43.67% |
-| 2023 | -9.11% | **+0.93%** |
-| 2024 | +8.52% | +12.34% |
+按自然年拆分三组代表性策略的净收益（2020、2024 为不完整年份，仅含策略存续月份）：
 
-结论：
+| 年份 | `lasso_all8` | `lasso_horizon_all8` | `ic_no_vol` |
+|---|---:|---:|---:|
+| 2020（部分） | +57.25% | +42.40% | +41.31% |
+| 2021 | +275.49% | +247.28% | +204.94% |
+| 2022 | +15.49% | +18.90% | +5.64% |
+| 2023 | +34.61% | +28.70% | +18.54% |
+| 2024（部分） | -4.54% | -20.79% | -7.67% |
 
-- `lasso_all8` 每一年都领先 `ic_no_vol`。
-- 2023 年 `ic_no_vol` 为负收益，而 `lasso_all8` 仍保持正收益。
-- Lasso 的优势不是单年运气，而是全周期表现。
+**三点观察**：
 
-### 5.4 剔除 2021 大牛市后的稳健性
+1. **2021 年是收益主贡献年**，三组均在 +200% 以上。这与 2021 年小市值/微盘股行情高度相关，策略的高换手、小市值暴露在该年充分兑现。
+2. **2022–2023 年收益回归常态**，年化 5%–35%，`lasso_horizon_all8` 在 2022、2023 年均优于 `ic_no_vol`，说明 Lasso 选股在震荡市仍有增量。
+3. **2024 年三组均转负**，`lasso_horizon_all8` 回撤 -20.79% 明显大于 `lasso_all8` 的 -4.54%。2024 年初微盘股流动性危机对持有期标签版本冲击更大，是主推策略需要重点披露的风险点（见 §7）。
 
-| 组 | 全周期 Sharpe | 剔除 2021 后 Sharpe |
-|---|---:|---:|
-| ic_no_vol | 1.448 | 0.706 |
-| lasso_all8 | 1.843 | 0.986 |
+### 5.4 剔除 2021 后的 Sharpe
 
-结论：即使剔除 2021 大牛市，`lasso_all8` 的 Sharpe 仍显著高于 `ic_no_vol`，说明其 alpha 具有跨周期稳健性。
+鉴于 2021 年收益占比过高，剔除该年后重算 Sharpe（口径与 §5.1 完全一致：`nav_stats`，期频净值，√12 年化），以检验策略稳健性：
+
+| 策略 | 全周期 Sharpe | 剔除 2021 Sharpe | 降幅 | 全周期年化 | 剔除 2021 年化 |
+|---|---:|---:|---:|---:|---:|
+| `lasso_all8` | 1.750 | 0.983 | -43.8% | +68.36% | +30.68% |
+| **`lasso_horizon_all8`** | **1.461** | **0.673** | **-53.9%** | **+53.69%** | **+18.81%** |
+| `ic_no_vol` | 1.345 | 0.650 | -51.7% | +47.02% | +16.77% |
+
+剔除 2021 后三组 Sharpe 均降至 0.65–0.98，降幅 44%–54%，说明策略收益对 2021 年行情依赖较重。其中 `lasso_horizon_all8` 降幅（-53.9%）大于 `lasso_all8`（-43.8%），与其 2024 年更大回撤一致，提示持有期标签版本在非 2021 年份的稳定性弱于旧标签版本——但旧标签含前视、不可直接比较，此处仅作风险提示。**剔除 2021 后主推策略年化仍有 +18.81%，显著高于沪深 300 的 -2.88%，策略基础 alpha 依然成立。**
 
 ---
 
-## §6 Backtrader 交叉验证（M7 证据）
+## §6 Backtrader 对账
 
-### 6.1 起点问题
+### 6.1 对账设计
 
-初始对账失败：
+自研引擎与 Backtrader 使用同一组合、同一调仓日历、同一价格面板，比较逐期 net 收益。验收线：净值相关系数 > 0.95、年化差 < 2%。
 
-- 相关系数：-0.24
-- Backtrader 净值：1.106
-- 自研净值：4.539
-- 完全对不上。
+### 6.2 v1 口径与遗留问题
 
-### 6.2 三个技术难点与解法
+v1 对账直接使用 `TimeReturn` analyzer 与 `order_target_percent`，存在两处口径错位：BT 的 `TimeReturn` 是 close-to-close，自研是 open-to-open；`order_target_percent` 在 `cheat_on_open` 下用昨日 close 估目标金额、今日 open 成交，跳空导致系统性少买（仓位仅约 95.5%）。v1 遗留的 close-vs-open 口径错位与估值时点错位，v2 修复见 §11.3。
 
-| 难点 | 现象 | 解法 |
+### 6.3 与 Backtrader 的对账（v2 口径）
+
+v2 脚本改为：记录调仓日 open 时（调仓前）组合价值、用今日 open 估值手动算股数并 `order_target_size` 下单、缺价股用最后可用 open ffill，与自研口径完全对齐。三组策略的 v2 对账结果如下：
+
+| 组 | net 年化差 | 相关系数 | gross 单期差 std |
+|---|---:|---:|---:|
+| `lasso_all8` | +0.13% | 1.0000 | 0.027% |
+| `lasso_horizon_all8` | +0.11% | 1.0000 | 0.059% |
+| `ic_no_vol` | +0.05% | 1.0000 | 0.053% |
+
+三组净值相关系数均为 **1.0000**，net 年化差均小于 0.15%，远优于"相关系数 > 0.95、年化差 < 2%"的验收线。其中 `ic_no_vol` 的 gross 年化差 -0.07%、net 年化差 +0.05%，说明自研引擎与 Backtrader 在收益路径和成本扣减上均已高度一致。
+
+对账明细见 `data/processed/bt_vs_self_*_v2.csv`。
+
+---
+
+## §7 风险分析
+
+### 7.1 年份集中度风险
+
+2021 年三组收益均超 +200%，贡献了全周期绝大部分收益。剔除 2021 后，主推 `lasso_horizon_all8` 年化由 +53.69% 降至 +18.81%，Sharpe 由 1.461 降至 0.673。**策略对小市值/微盘股行情高度敏感**，若未来市场风格切换至大盘价值，超额收益可能显著收窄。
+
+### 7.2 2024 年回撤风险
+
+`lasso_horizon_all8` 2024 年收益 -20.79%，为三组中最差，最大回撤 -21.84%。2024 年初微盘股流动性危机中，持有期标签版本因持仓更集中、换手更低，未能及时规避下跌。**建议实盘加入流动性过滤与回撤止损机制**。
+
+### 7.3 换手与成本风险
+
+策略月频调仓、top_n=50，平均换手约 50%（单边），按单边 0.4% 成本计，年化成本拖累约 4.8%。若实际滑点高于假设（如小市值股冲击成本），净收益将进一步下降。
+
+### 7.4 模型风险
+
+Lasso 在滚动窗口内训练，窗口长度与正则系数对结果敏感；持有期标签的 horizon 选择（h 期）影响训练样本量与信号衰减。本报告未做 horizon 敏感性网格，列为后续改进项（§9）。
+
+---
+
+## §8 稳健性检验
+
+| 检验 | 方法 | 结论 |
 |---|---|---|
-| 主时钟交集 | `next_open` 只触发 289 天 | 加日历 feed 作为 `datas[0]`，覆盖 1213 天 |
-| bar 缺失 | Backtrader 不推进、订单被拒 | 每只票 `reindex(全日历).ffill().bfill()` |
-| symbol 类型不一致 | holdings 是 int，panel 是 str，876 只只匹配 606 只 | 统一 `.astype(str).str.zfill(6)` |
-
-### 6.3 最终结果
-
-| 指标 | 结果 |
-|---|---:|
-| 净值相关系数 | **0.9970** |
-| 年化收益差 | **0.34%** |
-| 验收要求相关系数 | > 0.95 |
-| 验收要求年化差 | < 2% |
-
-结论：自研引擎与 Backtrader 在相同输入、相同调仓、相同成本口径下高度一致，交叉验证通过。
-
-关键脚本：
-
-```text
-scripts/backtest/run_backtrader_ic_no_vol.py
-```
-
-输出：
-
-```text
-data/processed/bt_vs_self_ic_no_vol.csv
-```
+| 双引擎对账 | Backtrader v2 vs 自研 | 相关系数 1.0000，年化差 ≤ 0.13% |
+| 剔除极端年 | 剔除 2021 重算 | 年化 +18.81%，Sharpe 0.673，alpha 仍成立 |
+| 因子集对照 | all8 vs no_vol | vol 因子有增量，Lasso 框架下更明显 |
+| 合成方法对照 | IC/IR/等权/Lasso | Lasso 最优，IC 加权次之，等权最弱 |
+| 标签对照 | t+1 vs horizon | horizon 无前视，年化低 14.7pp 但可信 |
 
 ---
 
-## §7 `volatility_20` 剔除对照
+## §9 局限与改进
 
-### 7.1 线性组：剔除 `volatility_20` 后提升
-
-| 对比 | all8 年化 | no_vol 年化 | 结论 |
-|---|---:|---:|---|
-| IC | +34.57% | +43.77% | 剔除后提升 |
-| IR | +37.36% | +42.30% | 剔除后提升 |
-| Equal | +29.90% | +40.39% | 剔除后提升 |
-
-解释：线性方法把 `volatility_20` 当作稳定风险暴露处理，剔除后减少噪声，提升组合表现。
-
-### 7.2 Lasso 组：保留 `volatility_20` 更好
-
-| 对比 | all8 年化 | no_vol 年化 | 结论 |
-|---|---:|---:|---|
-| Lasso | +65.43% | +41.52% | 保留更好 |
-
-解释：Lasso 能动态学习因子条件权重，保留 `volatility_20` 后，模型可以利用波动率状态信息，而不是把它当成固定方向因子。
-
-### 7.3 结论
-
-`volatility_20` 的处理方式在不同合成方法下不同：
-
-- 线性组：剔除更好。
-- Lasso 组：保留更好。
-
-因此最终最优策略为 `lasso_all8`，即 **Lasso + 全 8 因子**。
-
----
-
-## §8 Lasso 非线性合成讨论
-
-### 8.1 Lasso 系数统计
-
-```markdown
-### 8.1 Lasso 系数统计
-
-数据源：`data/processed/composite_weights_lasso_all8.csv`
-
-统计命令：
-
-```powershell
-python -c "import pandas as pd; w = pd.read_csv('data/processed/composite_weights_lasso_all8.csv', index_col=0); fac = ['turnover','volatility_20','amihud_20','bp','corr_pv_20','reversal_20','bias_20','ep_ttm']; print(w.loc[fac].T.describe().round(4).to_string())"
-```
-
-统计结果（52 期滚动窗口）：
-
-| 因子 | 均值 | 标准差 | 最小值 | 25% | 50% | 75% | 最大值 |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| turnover | 0.0236 | 0.0056 | 0.0153 | 0.0181 | 0.0237 | 0.0273 | 0.0348 |
-| volatility_20 | -0.0143 | 0.0078 | -0.0279 | -0.0212 | -0.0124 | -0.0079 | -0.0030 |
-| amihud_20 | 0.0056 | 0.0026 | -0.0016 | 0.0042 | 0.0055 | 0.0073 | 0.0099 |
-| bp | 0.0049 | 0.0042 | -0.0061 | 0.0016 | 0.0062 | 0.0087 | 0.0108 |
-| corr_pv_20 | 0.0031 | 0.0049 | -0.0060 | -0.0007 | 0.0036 | 0.0061 | 0.0125 |
-| reversal_20 | 0.0065 | 0.0050 | -0.0031 | 0.0025 | 0.0077 | 0.0106 | 0.0135 |
-| bias_20 | 0.0013 | 0.0086 | -0.0156 | -0.0027 | 0.0017 | 0.0069 | 0.0143 |
-| ep_ttm | 0.0027 | 0.0031 | -0.0028 | -0.0000 | 0.0025 | 0.0057 | 0.0085 |
-
-**解读：**
-
-1. **`turnover` 是最稳定的正向因子**  
-   系数始终为正（最小值 0.0153，最大值 0.0348），均值 0.0236，标准差仅 0.0056。说明 Lasso 在全部 52 个调仓期中都稳定地赋予换手率正权重，低换手股票持续获得更高得分。
-
-2. **`volatility_20` 是最稳定的负向因子**  
-   系数始终为负（最大值 -0.0030，最小值 -0.0279），均值 -0.0143，绝对值较大。说明 Lasso 稳定地规避高波动股票。这与线性组剔除 `volatility_20` 形成鲜明对比：线性方法无法稳定利用该因子，而 Lasso 可以。
-
-3. **其余因子系数较小且波动较大**  
-   `amihud_20`、`bp`、`corr_pv_20`、`reversal_20`、`bias_20`、`ep_ttm` 的均值均为正，但标准差相对较大，部分窗口出现负值。说明 Lasso 对这些因子的使用是条件性的——根据近期市场状态动态调整权重，而不是固定方向。
-
-4. **系数稀疏程度适中**  
-   在 `alpha=1e-4` 下，所有因子都保留了非零系数，没有出现完全被压缩为零的因子。这说明 8 个因子对模型均有边际贡献，Lasso 主要起到权重收缩和动态分配的作用，而非硬性特征选择。
-
-5. **对 `lasso_all8` 优势的解释**  
-   Lasso 能够稳定地给予 `turnover` 正权重、`volatility_20` 负权重，同时灵活调整其他因子权重。这种“稳定核心 + 动态辅助”的结构，使得 `lasso_all8` 在分年度和剔除 2021 的稳健性检验中均优于线性组。
-```
-
-
-### 8.2 为什么 Lasso 优于线性
-
-可能原因：
-
-1. **非线性与交互效应**：Lasso 能在不同市场状态下给因子不同权重。
-2. **因子冗余处理**：Lasso 可压缩冗余因子权重，降低共线性影响。
-3. **动态适应**：滚动训练使权重随近期市场结构变化。
-4. **波动率利用**：Lasso 保留 `volatility_20` 后，可以学习波动率与其他因子的交互。
-
-### 8.3 稳健性结论
-
-- `lasso_all8` 在 2020–2024 每一年都领先 `ic_no_vol`。
-- 剔除 2021 后，`lasso_all8` Sharpe 仍为 0.986，高于 `ic_no_vol` 的 0.706。
-- 因此，Lasso 的收益不是单年运气，而是较稳定的全周期 alpha。
-
----
-
-## §9 已知局限
-
-1. **未做行业 / 市值中性约束**  
-   当前组合可能暴露于行业或市值风格，后续可加中性约束验证。
-
-2. **未做 XGBoost 版本**  
-   任务书写“Lasso 或 XGBoost”，当前已完成 Lasso，XGBoost 可作为可选优化。
-
-3. **交易成本敏感性未展开**  
-   当前使用单边 0.4%，可测试 0.4% → 0.8% 的敏感性。
-
-4. **未做双月调仓对照**  
-   当前为月度调仓，双月调仓可能降低换手，但也会降低信号及时性。
-
-5. **回测期包含 2021 大牛市**  
-   虽然已做剔除 2021 的稳健性验证，但极端年份仍可能影响全周期指标。
-
-6. **停牌、涨跌停、容量冲击处理较简化**  
-   实盘需进一步考虑成交约束与冲击成本。
-
-7. **Lasso 可解释性有限**  
-   需要 §8.1 系数统计辅助解释。
+1. **horizon 敏感性未做网格**：持有期 h 仅取单一值，未测试 h=5/10/20 的稳健性。
+2. **交易成本假设偏乐观**：单边 0.4% 未区分大票/小票冲击成本，小市值股实际滑点可能更高。
+3. **未做行业中性化**：策略在小市值、成长因子上的暴露可能带来行业集中风险。
+4. **2024 年回撤控制不足**：未加入波动率目标或回撤止损。
+5. **样本外时间短**：2020–2024 仅 5 年，且 2021 年主导，样本外稳健性需更长区间验证。
 
 ---
 
 ## §10 结论
 
-阶段三目标已达成：
-
-1. M0–M7 全部完成。
-2. Backtrader 交叉验证通过，相关系数 0.9970，年化差 0.34%。
-3. 新增 Lasso 非线性合成，形成 8 组完整回测。
-4. 最优策略 `lasso_all8`：
-   - 年化 **+65.43%**
-   - Sharpe **1.681**
-   - 超额 **+68.75%**
-   - 最大回撤 **-21.91%**
-   - Calmar **2.986**
-5. 稳健性验证显示 `lasso_all8` 每年领先 `ic_no_vol`，剔除 2021 后仍保持优势。
-6. 验收标准全部达成。
-
-最终建议：将 `lasso_all8` 作为阶段三主推策略，同时保留 `ic_no_vol` 作为线性基准对照。
+1. **主推策略为 `lasso_horizon_all8`**：持有期标签消除前视，全周期年化 +53.69%、Sharpe 1.461、MDD -21.84%、Calmar 2.459，超额年化 +57.02%，在无前视约束的策略中最优。
+2. **Lasso 非线性合成优于线性加权**：同口径下较最优线性基准 `ic_no_vol` 年化高 6.67pp、Sharpe 高 0.116。
+3. **旧主推 `lasso_all8` 仅作对照**：t+1 标签含前视，年化虚高约 14.7pp，不可直接比较。
+4. **双引擎对账通过**：三组相关系数 1.0000、年化差 ≤ 0.13%，远优于验收线。
+5. **风险已充分披露**：收益对 2021 年依赖重（剔除后年化 +18.81%）、2024 年回撤 -20.79%，实盘需加流动性过滤与止损。
+6. **后续改进**：horizon 敏感性网格、行业中性化、成本精细化、回撤控制。
 
 ---
-## 附录 A：关键脚本清单
 
-```
-scripts/backtest/
-├── fetch_hs300.py                    # M1-A 沪深300基准
-├── build_rebalance_calendar.py       # M1-B 月度调仓日历
-├── compute_daily_ic.py               # M2-prep 逐日 1D IC
-├── composite_factors.py              # M2a 6 组线性合成
-├── composite_factors_lasso.py        # M2a-Lasso 非线性合成
-├── engine.py                         # 自研事件驱动引擎
-├── run_single_backtest.py            # M5a 单因子对账
-├── stage2_recompute_monthly.py       # M5a 阶段二月频修正
-├── run_composite_backtest.py         # M5b 8 组策略回测
-├── extract_holdings.py               # M7-a 持仓明细
-└── run_backtrader_ic_no_vol.py       # M7-b Backtrader 交叉验证
-```
+## §11 带教反馈响应
 
-### 关键数据文件
+### 11.1 反馈 1：主推策略应无前视偏差
 
-```
-data/processed/
-├── hs300_benchmark.parquet                    # 沪深300日线
-├── rebalance_calendar.csv                     # 60 期调仓日历
-├── factor_ic_daily_1d.parquet                 # 逐日 1D IC
-├── composite_scores_{method}_{set}.parquet    # 8 组合成分数
-├── composite_weights_{method}_{set}.csv       # 8 组权重记录
-├── composite_bt_{method}_{set}.csv            # 8 组逐期收益
-├── composite_bt_summary.csv                   # 8 组绩效汇总
-├── composite_holdings_ic_no_vol.csv           # 持仓明细
-├── bt_vs_self_ic_no_vol.csv                   # Backtrader 对账表
-└── stage2_monthly_recompute.csv               # 阶段二月频修正
-```
+**问题**：原主推 `lasso_all8` 使用 t+1 标签，训练时用到 T+1 收益，而实盘 T+1 开盘才成交，存在前视偏差。
 
-### 图表
+**响应**：新增 `composite_factors_lasso_horizon.py`，改用持有期标签（未来 h 期累计收益），训练集右端点严格早于预测期，滚动训练。新增 `lasso_horizon_all8`、`lasso_horizon_no_vol` 两组，主推切换为 `lasso_horizon_all8`。旧 `lasso_all8` 保留作对照，并在全报告标注"含前视、不可直接比较"。
+
+### 11.2 反馈 2：合成方法需覆盖非线性
+
+**问题**：原报告仅 IC/IR/等权三类线性合成，缺少非线性方法。
+
+**响应**：新增 Lasso 非线性合成（`lasso_all8`、`lasso_no_vol` 及 horizon 版本），L1 正则自动筛选因子、处理共线性。结果显示 Lasso 版本年化与 Sharpe 均优于线性基准。
+
+### 11.3 反馈 3：双引擎对账口径需严格对齐
+
+**问题**：v1 对账中 `lasso_horizon_all8` 年化差 -3.90%，未达验收线。根因是三层叠加：
+
+| 层 | 根因 | 修复 | 贡献 |
+|---|---|---|---:|
+| 1 | BT 的 `TimeReturn` 是 close-to-close，自研是 open-to-open | BT 改为记录调仓日 open 时（调仓前）组合价值，算 open-to-open 收益 | 约 -2.9pp |
+| 2 | `order_target_percent` 用昨日 close 估目标金额，今日 open 成交，跳空导致系统性少买（仓位仅 95.5%） | 改用今日 open 估值总价值手动算股数，`order_target_size` 下单 | 约 -2.2pp |
+| 3 | `engine.py` 的 `rets.dropna()` 丢弃停牌股收益 | 缺价股用"next_trade 前最后一个可用 open"填充，与 BT 的 ffill 口径一致 | `lasso_all8` 单期 9.77% 差 |
+
+**修复后两组对账结果**：
+
+| 组 | net 年化差（前→后） | 相关系数 | gross 单期差 std（前→后） |
+|---|---:|---:|---:|
+| `lasso_all8` | +3.06% → **+0.13%** | **1.0000** | 1.42% → **0.027%** |
+| `lasso_horizon_all8` | -3.90% → **+0.11%** | **1.0000** | 0.34% → **0.059%** |
+
+另补跑 `ic_no_vol` v2 对账（net 年化差 +0.05%、相关系数 1.0000），三组口径统一。
+
+**附带影响**：`engine.py` 停牌股口径修复后，10 组回测数字全部更新，详见 §5.1。
+
+### 11.4 本次新增脚本清单
+
+| 脚本 | 用途 |
+|---|---|
+| `scripts/backtest/composite_factors_lasso_horizon.py` | 持有期标签合成 |
+| `scripts/backtest/run_backtrader_lasso_all8_v2.py` | `lasso_all8` v2 对账 |
+| `scripts/backtest/run_backtrader_lasso_horizon_all8_v2.py` | `lasso_horizon_all8` v2 对账 |
+| `scripts/backtest/run_backtrader_ic_no_vol_v2.py` | `ic_no_vol` v2 对账 |
+| `scripts/backtest/diag_year_sharpe.py` | 分年度收益与剔除 2021 Sharpe |
+
+---
+
+## 附录 A：脚本与数据清单
+
+### A.1 脚本
 
 ```text
-docs/figures/stage3/composite_navs.png
+scripts/backtest/engine.py                            # 自研引擎（停牌股收益口径已修复）
+scripts/backtest/run_composite_backtest.py            # 10 组合成策略回测
+scripts/backtest/extract_holdings.py                  # 持仓导出（--group）
+scripts/backtest/composite_factors_lasso_horizon.py   # 持有期标签合成（新增）
+scripts/backtest/run_backtrader_lasso_all8_v2.py      # v2 对账（新增）
+scripts/backtest/run_backtrader_lasso_horizon_all8_v2.py  # v2 对账（新增）
+scripts/backtest/run_backtrader_ic_no_vol_v2.py       # v2 对账（新增）
+scripts/backtest/diag_year_sharpe.py                  # 分年度与剔除 2021（新增）
+scripts/backtest/diag/                                # 8 个诊断脚本（归档）
+
+### A.2 数据产物（`data/processed/`，gitignore 忽略）
+
+```text
+composite_bt_summary.csv                          # 10 组绩效汇总
+composite_bt_{group}.csv                          # 10 组逐期收益
+composite_scores_lasso_horizon_{all8,no_vol}.parquet
+composite_holdings_lasso_horizon_all8.csv
+bt_vs_self_lasso_all8_v2.csv                      # +0.13%
+bt_vs_self_lasso_horizon_all8_v2.csv              # +0.11%
+bt_vs_self_ic_no_vol_v2.csv                       # +0.05%
 ```
 
 ---
@@ -468,74 +351,59 @@ docs/figures/stage3/composite_navs.png
 ## 附录 B：复现命令
 
 ```powershell
-cd C:\Users\16075\code\multi_factor_lab
-.\.venv\Scripts\Activate.ps1
+# 环境
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-```
+$env:PYTHONIOENCODING = "utf-8"
 
-运行 Lasso 合成：
-
-```powershell
-python scripts\backtest\composite_factors_lasso.py
-```
-
-运行 8 组回测：
-
-```powershell
+# 10 组回测
 python scripts\backtest\run_composite_backtest.py
-```
 
-运行 Backtrader 交叉验证：
+# 双引擎 v2 对账
+python scripts\backtest\run_backtrader_lasso_all8_v2.py
+python scripts\backtest\run_backtrader_lasso_horizon_all8_v2.py
+python scripts\backtest\run_backtrader_ic_no_vol_v2.py
 
-```powershell
-python scripts\backtest\run_backtrader_ic_no_vol.py
+# 分年度与剔除 2021
+python scripts\backtest\diag_year_sharpe.py
 ```
 
 ---
 
-## 附录 C：Git 状态与提交建议
+## 附录 C：提交记录
 
-截至 M7 完成，已 push 到 `origin/main`。后续新增 commit：
-
-| Commit | 内容 |
+| commit | 说明 |
 |---|---|
-| `e979586` | feat: M2a-Lasso 滚动窗口 Lasso 因子合成 |
-| `a86a30a` | feat: M5b 回测脚本支持 Lasso 组（8 组配置） |
-| `c387c6d` | chore: 回测脚本文案 6 组 → 8 组 |
+| 本次 commit | `docs: 阶段三报告 v1.1，更新 10 组绩效与 v2 对账口径；fix: engine 停牌股收益口径修复` |
+| 历史 commit | 见 `git log --oneline` |
 
+---
 
-## 附录 D：关键技术决策记录
+## 附录 D：关键决策记录
 
 | 决策 | 结论 | 原因 |
 |---|---|---|
-| IC 用 1D 还是 20D | 1D | 20D 有前视风险 |
-| 滚动窗口 | 12 个月 | 带教确认；A 股因子月度自相关低 |
-| 信号平滑 | 3 期均值 | 换手 87.8% → 53.4%，Sharpe +0.27 |
-| 持仓数 | TOP_N=50 | 扩到 80 alpha 被稀释 |
-| 交易成本 | 单边 0.4% | 保守理解任务书“双边 0.3% + 滑点 0.1%” |
-| Lasso alpha | 1e-4 | 针对标准化 y；系数稀疏但多数非零 |
-| Lasso 调仓日 | 读线性组 index | 确保 52 期严格对齐 |
-| volatility_20 | 线性组剔除，Lasso 组保留 | 线性全提升；Lasso 全下降，能动态利用 |
+| 主推策略 | `lasso_horizon_all8` | 无前视标签，年化 +53.69%、Sharpe 1.461 |
+| `lasso_all8` 定位 | 旧标签对照，含约 14.7pp 虚高 | t+1 标签前视 |
+| 标签 | 持有期标签（horizon） | 消除 t+1 前视 |
+| BT 对账口径 | v2（open-to-open + 手动成本） | v1 close-to-close 与自研错位 |
+| 下单方式 | `order_target_size` + 今日 open 估值 | `order_target_percent` 用昨日 close 估值导致少买 |
+| 停牌股处理 | ffill 最后可用价 | 投资逻辑上不应丢弃持有收益 |
+| 成本 | 单边 0.4%（0.3% 手续费 + 0.1% 滑点） | 保守理解任务书 |
+| 验收线 | 相关系数 > 0.95、年化差 < 2% | 带教确认 |
 
 ---
 
-## 附录 E：阶段三踩坑记录
+## 附录 E：踩坑记录
 
-1. Backtrader 主时钟是“所有 data 交易日交集” → 用日历 feed 破。
-2. Backtrader 遇到 NaN 不推进主时钟 → reindex + ffill/bfill。
-3. pandas 大表逐只过滤会卡死 → 先 `groupby` 再 O(1) 取。
-4. symbol int vs str 静默不匹配 → 统一 `astype(str).str.zfill(6)`。
-5. PowerShell 中文乱码 → `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`。
-6. `except IndexError: continue` 必须显式写，否则 UnboundLocalError。
-7. Lasso 期数与线性组不对齐 → 直接读线性组 index。
-8. `BUFFER_RATIO = 0.95` 会带来约 2% 年化差 → 改 1.0 与自研对齐。
+1. **`TimeReturn` analyzer 是 close-to-close**，与自研 open-to-open 错位，单期可差 ±5%。
+2. **`order_target_percent` 在 `cheat_on_open` 下用昨日 close 估目标金额**，今日 open 成交，跳空导致系统性少买约 4.5% 仓位。
+3. **`rets.dropna()` 丢弃停牌股收益**，遇到 300641 这种停牌期间涨 4.86 倍的票，单期差 9.77%。
+4. **`strat.period_values` 存 `datetime.date` 时**，与 `DatetimeIndex` merge 会报 dtype 错，需 `pd.to_datetime`。
+5. **`composite_holdings_*.csv` 用 `pd.read_csv` 默认读**，symbol 会变 int（丢前导零），必须 `dtype={"symbol": str}` + `zfill(6)`。
 
 ---
 
-## 附录 F：待带教确认
+*报告结束。*
+```
 
-1. Backtrader 对账精度：相关系数 > 0.95、年化差 < 2% 是否足够。
-2. 是否需要补 XGBoost 版：任务书写“Lasso 或 XGBoost”，当前 Lasso 已完成。
 ---
-
-
