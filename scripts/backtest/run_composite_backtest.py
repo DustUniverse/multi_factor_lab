@@ -45,8 +45,9 @@ GROUPS = [
     ("equal_no_vol", "等权 · 剔vol"),
     ("lasso_all8", "Lasso · 8因子"),
     ("lasso_no_vol", "Lasso · 剔vol"),
+    ("lasso_horizon_all8", "Lasso-H · 8因子"),
+    ("lasso_horizon_no_vol", "Lasso-H · 剔vol"),
 ]
-
 TOP_N = 50
 BUFFER_N = 0
 SMOOTH_N = 3  # 信号平滑：用过去 3 期合成分数的均值

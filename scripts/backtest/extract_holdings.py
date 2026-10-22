@@ -40,6 +40,8 @@ GROUPS = [
     "ir_all8",
     "equal_all8",
     "lasso_all8",
+    "lasso_horizon_all8",
+    "lasso_horizon_no_vol",
 ]
 
 TOP_N = 50
