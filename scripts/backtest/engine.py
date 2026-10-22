@@ -115,6 +115,18 @@ def run_backtest(
             continue
         open_next = next_prices.reindex(valid)["open"]
 
+        # 停牌/缺价股：用该股在 next_trade 之前最后一个可用 open 填充
+        # （与 Backtrader 的 reindex+ffill 口径一致，避免丢弃停牌股收益）
+        missing = open_next[open_next.isna()].index
+        if len(missing) > 0:
+            last_avail = (
+                prices[prices["symbol"].isin(missing) & (prices["date"] <= next_trade)]
+                .sort_values("date")
+                .groupby("symbol")["open"]
+                .last()
+            )
+            open_next = open_next.fillna(last_avail)
+
         # 单只股票期间收益
         rets = (open_next / open_t - 1.0).replace([np.inf, -np.inf], np.nan).dropna()
         if len(rets) == 0:
