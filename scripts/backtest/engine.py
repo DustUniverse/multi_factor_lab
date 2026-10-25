@@ -31,6 +31,7 @@ def run_backtest(
     buffer_n: int = 0,
     cost_per_side: float = COST_PER_SIDE,
     slippage_per_side: float = SLIPPAGE_PER_SIDE,
+    position_series: pd.Series | None = None,
 ) -> dict:
     """事件驱动回测。
 
@@ -44,13 +45,16 @@ def run_backtest(
         列含 symbol, date, open, is_limit_up, is_suspended
     top_n : int
         每期持仓数
+    position_series : pd.Series | None
+        期初目标仓位序列。index=trade_date（datetime），value∈[0,1]。
+        None=满仓（基线，向后兼容）；缺失期沿用上一期，首期之前缺失默认 1.0。
 
     返回
     ----
     dict:
         periods : pd.DataFrame
             每期一行，列含 signal_date/trade_date/next_trade_date/
-            gross_ret/turnover/cost/net_ret/n_holding
+            gross_ret/turnover/cost/net_ret/n_holding/pos
         nav : pd.Series
             期频净值（index=trade_date）
         holdings : dict[trade_date -> list[symbol]]
@@ -59,9 +63,22 @@ def run_backtest(
     prices["date"] = pd.to_datetime(prices["date"])
     prices_by_date = {d: g.set_index("symbol") for d, g in prices.groupby("date")}
 
+    # ---- 新增：期初仓位序列预处理 ----
+    if position_series is not None:
+        if not isinstance(position_series, pd.Series):
+            position_series = pd.Series(position_series)
+        position_series = position_series.copy()
+        position_series.index = pd.to_datetime(position_series.index)
+        position_series = position_series.reindex(
+            pd.to_datetime(calendar["trade_date"])
+        )
+        # 缺失沿用上一期；首期之前缺失默认满仓 1.0
+        position_series = position_series.ffill().fillna(1.0)
+
     records = []
     holdings = {}
     prev_holdings: set[str] = set()
+    prev_pos: float | None = None  # 新增：上一实际执行期的仓位；None=尚未执行过
 
     n_periods = len(calendar)
     for i in range(n_periods - 1):  # 最后一期没有下一期可卖
@@ -98,25 +115,20 @@ def run_backtest(
         # 持仓缓冲：旧持仓里仍在前 pool_size 的优先保留
         pool_top = valid_pool[:pool_size]
         kept = [s for s in pool_top if s in prev_holdings]
-        # 剩余位置用池子里非旧持仓的按分数补满
         fill = [s for s in valid_pool if s not in prev_holdings]
         valid = (kept + fill)[:top_n]
 
         if len(valid) < top_n // 2:
-            # 可交易标的太少，跳过这一期（避免异常净值）
             continue
 
-        # 期初开盘价
         open_t = trade_prices.loc[valid, "open"]
 
-        # 期末（下一调仓日）开盘价
         next_prices = prices_by_date.get(next_trade)
         if next_prices is None:
             continue
         open_next = next_prices.reindex(valid)["open"]
 
         # 停牌/缺价股：用该股在 next_trade 之前最后一个可用 open 填充
-        # （与 Backtrader 的 reindex+ffill 口径一致，避免丢弃停牌股收益）
         missing = open_next[open_next.isna()].index
         if len(missing) > 0:
             last_avail = (
@@ -127,19 +139,35 @@ def run_backtest(
             )
             open_next = open_next.fillna(last_avail)
 
-        # 单只股票期间收益
+        # 单只股票期间收益（满仓等权口径）
         rets = (open_next / open_t - 1.0).replace([np.inf, -np.inf], np.nan).dropna()
         if len(rets) == 0:
             continue
         gross = float(rets.mean())
 
+        # ---- 新增：期初目标仓位 ----
+        if position_series is not None:
+            pos = float(position_series.get(trade, 1.0))
+            pos = float(np.clip(pos, 0.0, 1.0))
+        else:
+            pos = 1.0
+
         # 换手：新买入的占比（对称地卖出）
         cur_set = set(valid)
         turnover = len(cur_set - prev_holdings) / len(cur_set) if cur_set else 0.0
 
-        # 成本 = 换手比例 × 2 × 单边成本
-        cost = turnover * 2.0 * (cost_per_side + slippage_per_side)
-        net = gross - cost
+        # ---- 修改：成本拆成「股票换手」+「仓位调整」 ----
+        # 股票换手成本按 pos 缩放：只有 pos 部分资金在股票里换手
+        stock_cost = turnover * 2.0 * (cost_per_side + slippage_per_side) * pos
+        # 仓位调整成本：单边；首期（prev_pos is None）不收费，避免与首期 turnover×2 重复
+        if prev_pos is None:
+            pos_cost = 0.0
+        else:
+            pos_cost = abs(pos - prev_pos) * (cost_per_side + slippage_per_side)
+        cost = stock_cost + pos_cost
+
+        # 组合净收益 = 股票部分收益（pos 缩放） - 总成本
+        net = pos * gross - cost
 
         records.append(
             {
@@ -151,10 +179,12 @@ def run_backtest(
                 "cost": cost,
                 "net_ret": net,
                 "n_holding": len(valid),
+                "pos": pos,  # 新增列
             }
         )
         holdings[trade] = valid
         prev_holdings = cur_set
+        prev_pos = pos  # 新增：更新上一实际仓位
 
     periods = pd.DataFrame(records)
     if periods.empty:
