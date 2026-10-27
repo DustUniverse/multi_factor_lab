@@ -2,7 +2,8 @@
 # mfalpha 核心包
 
 `src/mfalpha` 是项目核心 Python 包，提供数据对齐、因子计算等基础模块。  
-阶段三的合成与回测运行入口主要位于 `scripts/backtest/`，核心包保持数据与因子基础能力。
+阶段三/四的合成、回测、验证分析与工程化入口主要位于 `scripts/` 与项目根；核心包保持数据与因子基础能力，不承载一次性分析脚本。  
+阶段四 M0–M5 验证分析与 M7 工程化已完成；一键复现入口为项目根 `run_all_stage4.ps1`（32 项成功、0 失败），最终总报告 `docs/stage4/stage4_final_report.md` 正文待定稿。
 
 ## 目录说明
 
@@ -37,7 +38,7 @@ src/mfalpha/
 - 同一 `ann_date + end_date` 可能有多条，需要去重；
 - 未来公告日（追溯公告 / IPO 披露）在 PIT 下天然不生效。
 
-## 阶段三与核心包的关系
+## 阶段三/四与核心包的关系
 
 阶段三的合成、回测、交叉验证以脚本形式落地在 `scripts/backtest/`：
 
@@ -51,6 +52,16 @@ src/mfalpha/
 | `run_backtrader_{lasso_all8\|lasso_horizon_all8\|ic_no_vol}_v2.py` | Backtrader v2 交叉验证（三组） |
 | `diag_year_sharpe.py` | 分年度收益与剔除 2021 Sharpe |
 
+阶段四不改变核心包职责。阶段四的基线复核、风险归因、M4 仓位/因子平滑、M5 稳健性与绩效对齐脚本，按仓库实际归档放在 `scripts/` 或项目根；**不要把这些一次性分析脚本塞进 `src/mfalpha`**。  
+阶段四一键入口与关键产物：
+
+| 入口 / 产物 | 位置 | 说明 |
+|---|---|---|
+| `run_all_stage4.ps1` | 项目根 | 阶段四一键复现；已跑通 32 项成功、0 失败 |
+| `m3_rebuild_daily_nav.py` | 按仓库实际归档 | 日频净值重建；Pandas `FutureWarning` 不影响数值，不修，写入“已知限制” |
+| `m5_1c_perf.csv` | 阶段四产物 | 六组绩效对齐表 |
+| `m5_1c_attribution.csv` | 阶段四产物 | M4 增量拆解表 |
+| `m4c_bt_periods` / `m4_final_periods` | 阶段四产物 | 逐行完全一致（max diff = 0），证明 M4c 已挂载 M4a×M4b 仓位 |
 核心包 `src/mfalpha` 继续为这些脚本提供数据对齐与因子计算基础。
 
 ## 阶段三硬性规范
@@ -89,12 +100,16 @@ python -m pytest tests
 阶段一/二基线为 **59 passed**；阶段三新增测试以 `python -m pytest` 实际输出为准。  
 新增测试应覆盖：合成权重滚动时点、Lasso 时间切分、持有期标签无前视、交易规则、事件驱动对照策略、绩效指标手算对照。
 
-## 与阶段二 / 三的衔接
+## 与阶段二 / 三 / 四的衔接
 
 - 阶段二最终因子库：`data/processed/factor_panel_final.parquet`（5,045,205 × 8，MultiIndex，方向已统一）。
 - 阶段三在此之上做合成与回测，中间产物写入 `data/processed/composite_*.parquet`、`composite_bt_*.csv`、`bt_vs_self_*_v2.csv`。
 - 阶段三主推策略 **`lasso_horizon_all8`**（持有期标签，无前视）：年化 **+53.69%**、Sharpe **1.461**、超额 **+57.02%**。
 - 旧主推 `lasso_all8`（t+1 标签）年化 +68.36%，含前视偏差，仅作对照。
+- 阶段四主线仍为 `lasso_horizon_all8`（持仓 50 只等权，月度调仓）。M4 最终绩效：期频年化 **43.49%**、Sharpe **1.5527**、期频 MDD **-16.22%**、日频 MDD **-27.56%**；剔除 2021 Sharpe **0.722**。
+- 阶段四验收为 **2 PASS / 2 FAIL**：期频 MDD PASS、剔除 2021 不劣化 PASS；Sharpe ≥ 1.680 FAIL（差 **0.127**）、日频 MDD ≤ 25% FAIL（超 **2.56pp**）。FAIL 必须如实披露。
+- 阶段四口径：绩效统一对齐 `engine.nav_stats`，年化使用 **n-1 期收益率**；M4c 必须叫 **“因子平滑（前视修正 + 系数/分数双层平滑）”**，不能叫“因子轮动”；M4c 表述为“v2 分数在仓位之上叠加”，不称独立增量。
+- 1.680 不可达的根因是 alpha 集中于低流动性小盘股；流动性过滤会把 Sharpe 从 1.553 削到 0.746。**严禁为凑目标调参**。
 ```
 
 ---

@@ -1,8 +1,8 @@
-```markdown
 # scripts 脚本目录
 
 本目录存放项目可执行脚本，按用途分为 `data / quality / factors / validation / backtest / attribution / probe` 七类。  
-阶段三脚本实际集中在 `scripts/backtest/` 下，原规划中的 `scripts/composite/` 未单独使用。
+阶段三脚本实际集中在 `scripts/backtest/` 下，原规划中的 `scripts/composite/` 未单独使用。  
+阶段四验证分析（M0–M5）与工程化（M7）已完成；**一键复现入口在项目根 `run_all_stage4.ps1`**，不在本目录下。阶段四各脚本以仓库实际归档为准，新增后必须在本 README 登记。
 
 ## 运行前准备
 
@@ -25,6 +25,8 @@ pip install -e .
 | `backtest/diag/` | 阶段三诊断脚本归档 | 停牌股、dropna、单期差、分年度 Sharpe 等 11 个诊断脚本 |
 | `attribution/` | 数据源探测 | 腾讯行情、HS300、申万成分股接口探测 |
 | `probe/` | 接口探测与临时诊断 | AKShare 参数探测、Tushare 字段检查 |
+
+> 阶段四脚本若未单独建子目录，按实际归档位置登记；**禁止只存在于本地而不写进本 README**。
 
 ## 常用脚本
 
@@ -76,6 +78,31 @@ pip install -e .
 | `run_backtrader_ic_no_vol_v2.py` | M7-b-v2 | v2 对账，net 年化差 +0.05% | `bt_vs_self_ic_no_vol_v2.csv` |
 | `diag_year_sharpe.py` | M8 | 分年度收益与剔除 2021 Sharpe（与 summary 同口径） | 终端输出 |
 
+### 阶段四脚本与入口
+
+阶段四的一键复现入口在项目根，不在 `scripts/` 下：
+
+| 脚本 / 入口 | 位置 | 里程碑 | 说明 |
+|---|---|---|---|
+| `run_all_stage4.ps1` | 项目根 | M7 工程化 | 阶段四一键复现；已跑通 **32 项成功、0 失败** |
+| `m3_rebuild_daily_nav.py` | 按仓库实际归档 | M3 | 日频净值重建；存在 Pandas `FutureWarning`，**不影响数值，不修**，写入“已知限制” |
+
+阶段四其余脚本（M1 基线复核、M2 风险归因、M4 仓位/因子平滑、M5 稳健性与 M5.1c 绩效对齐）以仓库实际文件为准。新增后必须在本表登记，并写清：
+
+- 所属里程碑（M1–M5 / M7）
+- 输入与输出文件
+- 是否挂载 M4a×M4b 仓位
+- 是否涉及 M4c 因子平滑
+
+阶段四关键产物：
+
+| 产物 | 说明 |
+|---|---|
+| `m5_1c_perf.csv` | 阶段四六组绩效对齐表 |
+| `m5_1c_attribution.csv` | 阶段四 M4 增量拆解表 |
+| `m4c_bt_periods` / `m4_final_periods` | 逐行完全一致（max diff = 0），用于证明 M4c 已挂载仓位 |
+| `reports/figures/stage4/m1_*.png` ~ `m5_*.png` | 阶段四图表，共十几张；在项目根 `reports/` 下，**不在 `docs/` 下** |
+
 ### 诊断脚本（scripts/backtest/diag/）
 
 归档 11 个阶段三诊断脚本，用于定位 `engine.py` 与 Backtrader 差异、停牌股处理、dropna 影响等：
@@ -103,6 +130,16 @@ pip install -e .
 6. Backtrader 只做交叉验证，主引擎是自研的。
 7. **停牌股收益用最后可用 open 填充**，不得 `dropna` 丢弃。
 
+## 阶段四硬性规范（写代码前必读）
+
+1. **绩效统一对齐 `engine.nav_stats`**；年化使用 **n-1 期收益率**，不得混用其他口径。
+2. **M4c 必须正名为“因子平滑（前视修正 + 系数/分数双层平滑）”**，绝不能叫“因子轮动”；代码中不存在滚动 IC 重加权。
+3. **M4c 不称独立增量**：`m4c_bt_periods` 与 `m4_final_periods` 逐行完全一致（max diff = 0），说明 M4c 回测已挂载 M4a×M4b 仓位；表述为“v2 分数在仓位之上叠加”。
+4. **`m3_rebuild_daily_nav.py` 的 Pandas `FutureWarning` 不修**，写入“已知限制”即可；不得因为它去改数值口径。
+5. **严禁为了凑 1.680 Sharpe 或日频 MDD ≤ 25% 而调参**。定稿基线为 Sharpe **1.5527**、日频 MDD **-27.56%**，FAIL 必须如实披露。
+6. **阶段四图表输出到项目根 `reports/figures/stage4/`**，不要写进 `docs/figures/stage4/`。
+7. 新增阶段四脚本必须同步更新：本 README、根 README 的“关键产物文件”、`docs/README.md` 的阶段四文档节。
+
 ## 阶段三踩坑记录
 
 1. Backtrader 主时钟是“所有 data 交易日交集” → 用日历 feed 破。
@@ -118,6 +155,17 @@ pip install -e .
 11. **`rets.dropna()` 丢弃停牌股收益**，300641 停牌期间涨 4.86 倍，单期差 9.77% → 用最后可用 open ffill 填充。
 12. **pre-commit flake8 报 E501 行过长** → 先 `pre-commit run --files <file>` 让 black 自动折行，再 `git add` 重新提交。
 
+## 阶段四防坑记录
+
+1. **M4c 叫“因子轮动”** → 错。正名为“因子平滑（前视修正 + 系数/分数双层平滑）”，代码无滚动 IC 重加权。
+2. **把 M4c 当独立增量汇报** → 错。M4c 回测已挂载仓位，只能表述为“v2 分数在仓位之上叠加”。
+3. **用 `top_n=25` 的全期 1.717 替代主线** → 错。剔除 2021 后仅 0.683，判定为行情馈赠，已否决。
+4. **用 M4c 平滑 `K=5` 的全期 1.76 替代主线** → 错。K 未收敛且换手极低，判定为低换手红利，已否决。
+5. **为凑 1.680 反复调参** → 严禁。1.55 是无前视、合规持仓下的现实上限；流动性过滤会把 Sharpe 打到 0.746。
+6. **把日频 MDD 超限归因于“参数没调好”** → 错。根因是月度调仓引擎无法在期内响应急跌，2024-02-05 谷底落在两次调仓之间；改进需日内止损机制，超出当前引擎设计。
+7. **把 `m3_rebuild_daily_nav.py` 的 `FutureWarning` 当 bug 修** → 不必。不影响数值，写入已知限制。
+8. **图表写到 `docs/figures/stage4/`** → 错。应在项目根 `reports/figures/stage4/`。
+
 ## 注意事项
 
 - Tushare 批量拉取必须在干净 IP 下进行，校园网可能触发“IP 数量超限”。
@@ -129,4 +177,4 @@ pip install -e .
 - `np.percentile([])` 对空数组会抛 `IndexError`，调用前先判断 `len(valid) == 0`。
 - 事件驱动回测：**先跑对照策略**（如固定持有 1 只、已知净值可手算），确认引擎无 bug，再上真策略。
 - 新增脚本后，**同步更新本 README 和根 README 的“关键产物文件”表**。
-```
+- **阶段四新增**：`run_all_stage4.ps1` 必须保持 32 项成功、0 失败；任何新增阶段四脚本都要纳入该一键脚本，并在本 README 登记。
