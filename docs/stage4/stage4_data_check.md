@@ -1,5 +1,5 @@
 # 阶段四数据检查报告
-生成时间: 2026-10-25 16:39:37
+生成时间: 2026-10-27 20:06:22
 
 ### composite_holdings_lasso_horizon_all8.csv
 - shape: (2600, 4)
