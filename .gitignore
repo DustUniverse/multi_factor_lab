@@ -20,3 +20,4 @@ __pycache__/
 # Python packaging build artifacts
 *.egg-info/
 
+docs/stage4/stage4_final_report.html
